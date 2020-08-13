@@ -1,0 +1,15 @@
+[Unit]
+Description=mDNS Proxy Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/home/pi/mdnsProxy
+WorkingDirectory=/home/pi
+StandardOutput=file:/home/pi/logs/mdnsProxy.log
+StandardError=file:/home/pi/logs/mdnsProxy.log
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
