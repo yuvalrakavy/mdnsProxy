@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	re "regexp"
 	"sort"
 	"time"
 
@@ -52,6 +53,8 @@ type detachRequest struct {
 
 type terminateRequest struct {
 }
+
+var removeBackslashRegex = re.MustCompile(`\\(.)`)
 
 func NewBrowser(resolver *zeroconf.Resolver, service, domain string, cycleDuration time.Duration, onTerminate OnTerminateCallback) *MDNSbrowser {
 	browser := MDNSbrowser{
@@ -254,7 +257,7 @@ func (instance *instanceInfo) element() *ms.Element {
 
 	return ms.NewElement("Instance",
 		ms.Attributes{
-			"Name":     entry.Instance,
+			"Name":     removeBackslashRegex.ReplaceAllString(entry.Instance, "$1"),
 			"HostName": entry.HostName,
 			"Port":     entry.Port,
 		},
