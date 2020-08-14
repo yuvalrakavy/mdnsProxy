@@ -43,7 +43,7 @@ func startPublishInstance(context ctx.Context, name, service, domain string, ins
 
 	var txt []string
 
-	for _, txtElement := range instanceElement.GetChildren("TXT") {
+	for _, txtElement := range instanceElement.GetChildren("Txt") {
 		txt = append(txt, txtElement.GetValue())
 	}
 
