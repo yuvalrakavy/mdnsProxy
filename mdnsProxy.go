@@ -75,6 +75,7 @@ import (
 	ms "github.com/yuvalrakavy/messageStream"
 )
 
+const LogMdnsProxy = "mdnsProxy"
 const CYCLE_TIME = 60 // Rescan every 60 seconds
 
 type MdnsProxyEndPointInfo struct {
@@ -96,16 +97,13 @@ func getMdnsProxyEndPointInfo(endPoint *ms.EndPoint) *MdnsProxyEndPointInfo {
 	return &info
 }
 
-func onPacketReceived(packet *ms.Packet) {
-	log.Println("Recieved packet: ", packet)
-
+func onPacketReceived(packet *ms.Packet) bool {
 	switch packet.GetType() {
 
 	case "_Login":
 		newName := packet.Element.GetAttribute("Name", "")
 		if len(newName) > 0 {
-			log.Println("_Login - name set to: ", newName)
-			packet.EndPoint.Name = newName
+			packet.EndPoint.SetName(newName)
 		}
 
 		_ = packet.OptionalReply(ms.Attributes{"Name": "mDNSproxy", "Version": "1.0"}).Send()
@@ -157,6 +155,8 @@ func onPacketReceived(packet *ms.Packet) {
 		log.Println("Invalid request:", packet)
 		_ = packet.Exception(fmt.Errorf("Invalid request: %v", packet)).Send()
 	}
+
+	return true
 }
 
 func startBrowsing(packet *ms.Packet) (*ms.Packet, error) {
@@ -172,7 +172,7 @@ func startBrowsing(packet *ms.Packet) (*ms.Packet, error) {
 	browser, alreadyBrowsing := serviceInfo.activeBrowsers[fullServiceName]
 	if !alreadyBrowsing {
 		browser = NewBrowser(serviceInfo.resolver, service, domain, CYCLE_TIME*time.Second, func(b *MDNSbrowser) {
-			log.Println("Browser for ", fullServiceName, " was terminated")
+			packet.EndPoint.Log(LogMdnsProxy).Println("Browser for ", fullServiceName, " was terminated")
 			delete(serviceInfo.activeBrowsers, fullServiceName)
 		})
 		serviceInfo.activeBrowsers[fullServiceName] = browser
@@ -242,8 +242,7 @@ func startPublish(packet *ms.Packet) (*ms.Packet, error) {
 		}
 
 		context, cancel := ctx.WithCancel(ctx.Background())
-		fmt.Println("RemoteEndPointAddress:", remoteEndPointAddress.String())
-		err := startPublishInstance(context, name, service, domain, instanceElement, remoteEndPointAddress)
+		err := startPublishInstance(packet.EndPoint, context, name, service, domain, instanceElement, remoteEndPointAddress)
 
 		if err != nil {
 			cancel()
@@ -298,8 +297,10 @@ func onCloseEndPoint(endPoint *ms.EndPoint) {
 func main() {
 	var err error
 	var port int
+	var enabledLoggingTypes string
 
 	flag.IntVar(&port, "port", 1000, "service port")
+	flag.StringVar(&enabledLoggingTypes, "log", "", "What should be logged")
 	flag.Parse()
 
 	log.Println("Starting mDNS proxy service on port:", port)
@@ -313,13 +314,15 @@ func main() {
 	}
 
 	service := ms.NewService("mDNSproxy", "tcp", ":"+strconv.Itoa(port), serviceInfo, func(service *ms.Service, conn net.Conn) *ms.EndPoint {
-		endPoint := ms.NewEndPoint("", conn).OnPacketReceived(onPacketReceived).OnClose(onCloseEndPoint)
+		endPoint := ms.NewEndPoint("", conn).AddLoggingHandler([]string{LogMdnsProxy}).OnPacketReceived(onPacketReceived).OnClose(onCloseEndPoint)
 		endPoint.Info = MdnsProxyEndPointInfo{
 			activePublishers: make(map[string]ctx.CancelFunc),
 		}
 
 		return endPoint
 	})
+
+	service.EnableLogging(enabledLoggingTypes)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)

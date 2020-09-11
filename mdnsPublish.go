@@ -3,7 +3,6 @@ package main
 import (
 	ctx "context"
 	"fmt"
-	"log"
 	"net"
 
 	"github.com/grandcat/zeroconf"
@@ -11,7 +10,7 @@ import (
 	ms "github.com/yuvalrakavy/messageStream"
 )
 
-func startPublishInstance(context ctx.Context, name, service, domain string, instanceElement *ms.Element, defaultRemoteAddr net.Addr) error {
+func startPublishInstance(endPoint *ms.EndPoint, context ctx.Context, name, service, domain string, instanceElement *ms.Element, defaultRemoteAddr net.Addr) error {
 	fullName := name + ":" + service + "." + domain
 	port := instanceElement.GetIntAttribute("Port", -1)
 
@@ -66,10 +65,10 @@ func startPublishInstance(context ctx.Context, name, service, domain string, ins
 	var err error
 
 	if publishLocalHost {
-		log.Printf("Publish %v:%v running on local machine\n", fullName, port)
+		endPoint.Log(LogMdnsProxy).Printf("Publish %v:%v running on local machine\n", fullName, port)
 		server, err = zeroconf.Register(name, service, domain, port, txt, nil)
 	} else {
-		log.Printf("Publish %v:%v running on another machine address %v\n", fullName, port, ips)
+		endPoint.Log(LogMdnsProxy).Printf("Publish %v:%v running on another machine address %v\n", fullName, port, ips)
 		server, err = zeroconf.RegisterProxy(name, service, domain, port, host, ips, txt, nil)
 	}
 
@@ -79,7 +78,7 @@ func startPublishInstance(context ctx.Context, name, service, domain string, ins
 
 	go func() {
 		<-context.Done()
-		log.Printf("Stop publishing %v:%v\n", fullName, port)
+		endPoint.Log(LogMdnsProxy).Printf("Stop publishing %v:%v\n", fullName, port)
 		server.Shutdown()
 	}()
 
